@@ -1,0 +1,21 @@
+.destination {
+	display:		inline-block;
+	border-style:	dotted;
+	border-width:	1px;
+	border-color:	red;
+}
+
+.title {
+	display:		block;
+}
+
+.contents {
+	display:		block;
+}
+
+.content {
+	display:		block;
+	border-style:	dotted;
+	border-width:	1px;
+	border-color:	blue;
+}

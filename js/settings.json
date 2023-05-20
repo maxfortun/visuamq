@@ -1,0 +1,14 @@
+{
+	"amqUrl":		"wss://activemq-hostname:61615",
+	"amqUsername":	"username",
+	"amqPassword":	"password",
+	"destinationPrefix": "/topic/",
+	"advisoryDestination": "/topic/ActiveMQ.Advisory.Topic",
+	"excludeDestinations": "",
+	"idHeaders": "breadcrumbId",
+	"evictAfter": 60,
+	"showEmptyDestinations": false,
+	"showContent": false,
+	"filterDestinations": "",
+	"breadcrumbId": "breadcrumbId"
+}

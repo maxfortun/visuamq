@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>VisuAMQ</title>
+	<link href="css/style.css" rel="stylesheet">
+    <script src="js/stomp.js"></script>
+    <script>
+		const destinations		= {};
+		let excludeDestinations	= [];
+		let idHeaders			= [];
+		let filterDestinations	= [];
+
+		let client				= null;
+
+		function processAdvisoryMessage(frame) {
+			// console.log('advisoryMessage', frame);
+			const body = JSON.parse(frame.body);
+			subscribeDestination(body.DestinationInfo.destination.string);
+		}
+
+		function processDestinationMessage(frame) {
+			// console.log('destinationMessage', frame);
+			const headers = frame.headers;
+
+			let contentId = null;
+			for(const headerName of idHeaders) {
+				contentId = headers[headerName];
+				if(contentId) {
+					break;
+				}
+			}
+
+			if(!contentId) {
+				console.log("No content id", idHeaders, frame);
+				return;
+			}
+
+			const prefixRE = new RegExp('^'+localStorage.destinationPrefix);
+			const destinationName = headers.destination.replace(prefixRE,'');
+			const breadcrumbId = headers[localStorage.breadcrumbId];
+
+			processContent({breadcrumbId, contentId, destinationName});
+		}
+
+		function processContent(content) {
+			const { breadcrumbId, contentId, destinationName } = content;
+
+			const destinationDiv = document.getElementById('destination:'+destinationName);
+
+			const uid = 'content:'+contentId+":"+breadcrumbId;
+			let contentDiv = document.getElementById(uid);
+			if(!contentDiv) {
+				contentDiv = document.createElement('div');
+				contentDiv.className = 'content';
+				contentDiv.id = uid;
+				contentDiv.innerHTML = '<div class="contentTitle"><div class="contentId">'+contentId+'</div><div class="contentTime"></div></div><div class="contentTrace"></div>';
+				contentDiv.dataset.createDate = new Date().getTime();
+				setTimeout(removeStaleContent, parseInt(localStorage.evictAfter) * 1000, contentDiv);
+			} else {
+				const createDate = parseInt(contentDiv.dataset.createDate);
+				const now = new Date();
+				const contentTime = now.getTime() - createDate;
+
+				const contentTimeDiv = contentDiv.querySelector('.contentTime');
+				contentTimeDiv.innerText = contentTime+" ms";
+
+				const contentTraceDiv = contentDiv.querySelector('.contentTrace');
+				let updateDate = parseInt(contentTraceDiv.dataset.updateDate);
+				if (!updateDate) {
+					updateDate = createDate;
+				}
+				contentTraceDiv.dataset.updateDate = new Date().getTime();
+
+				const traceTokenDiv = document.createElement('div');
+				traceTokenDiv.className = 'contentTraceToken';
+				
+				const prevDestinationDiv = contentDiv.closest('.destination');
+				const prevDestinationNameDiv = prevDestinationDiv.querySelector('.destinationName');
+				const prevDestinationTimeDiv = prevDestinationDiv.querySelector('.destinationTime');
+
+				//const time = String(now.getMinutes()).padStart(2, '0') + ":" + String(now.getSeconds()).padStart(2, '0') + "." + String(now.getMilliseconds()).padStart(3, '0');
+				const traceTime = now - updateDate;
+
+				const prevDestinationName = prevDestinationNameDiv.innerText;
+				traceTokenDiv.innerHTML = '<div class="contentTraceTokenDestination">' + prevDestinationName + '</div><div class="contentTraceTokenTime">' + traceTime + ' ms</div>';
+				contentTraceDiv.appendChild(traceTokenDiv);
+
+				prevDestinationDiv.times.push(contentTime);
+				if(prevDestinationDiv.times.length > 10) {
+					prevDestinationDiv.times.shift();
+				}
+				const prevDestinationTime = Math.round(prevDestinationDiv.times.reduce((a,b) => a + b) / prevDestinationDiv.times.length);
+				// console.log(prevDestinationName, prevDestinationDiv.times);
+				prevDestinationTimeDiv.innerText = prevDestinationTime + " ms";
+				orderDestinations(prevDestinationDiv, destinationDiv);
+			}
+			// console.log(destinationName, contentId, destinationDiv, destinationContentsDiv);
+
+			const destinationContentsDiv = destinationDiv.querySelector(".contents");
+			destinationContentsDiv.appendChild(contentDiv);
+		}
+
+		function removeStaleContent(contentDiv) {
+			// console.log("Removing", contentDiv);
+			contentDiv.parentNode.removeChild(contentDiv);
+		}
+
+		function orderDestinations(prevDestinationDiv, destinationDiv) {
+			const parentNode = prevDestinationDiv.parentNode;
+			const prevIndex = Array.prototype.indexOf.call(parentNode.children, prevDestinationDiv);	
+			const index = Array.prototype.indexOf.call(parentNode.children, destinationDiv);	
+			if(prevIndex <= index) {
+				return;
+			}
+			// console.log(prevIndex, prevDestinationDiv, index, destinationDiv);
+			parentNode.insertBefore(destinationDiv, prevDestinationDiv);
+		}
+
+
+		function subscribeDestination(destinationName) {
+			let destinationInfo = destinations[destinationName];
+			if(destinationInfo) {
+				return;
+			}
+
+			for(const rule of excludeDestinations) {
+				if(destinationName.match(rule)) {
+					// console.log("Excluded destination: "+destinationName);
+					return;
+				}
+			}
+
+			// console.log(destinationName);
+			destinationInfo = destinations[destinationName] = {};
+			const div = destinationInfo.div = document.createElement('div');
+			div.className = 'destination';
+			div.id = 'destination:'+destinationName;
+			div.dataset.destinationName = destinationName;
+			div.times = [];
+			div.innerHTML = '<div class="destinationTitle"><div class="destinationName">'+destinationName+'</div><div class="destinationTime"></div></div><div class="contents"></div>';
+			const destinationsDiv = document.querySelector(".destinations");
+			destinationsDiv.appendChild(div);
+           	client.subscribe(localStorage.destinationPrefix+destinationName, processDestinationMessage);
+			applyDestinationFilters();
+		}
+
+		function reconnect() {
+			if(!client) {
+				return connect();
+			}
+			try {
+				client.disconnect(() => {
+					client = null;
+					connect();
+				});
+			} catch(e) {
+				connect();
+			}
+		}
+
+		function getSetting(name) {
+			const value = localStorage[name];
+			return value;
+		}
+
+		function connect() {
+			const url		= getSetting('amqUrl');
+			const username	= getSetting('amqUsername');
+			const password	= getSetting('amqPassword');
+
+			if(!url || !username || !password) {
+				console.log("Missing amq settings.");
+				return;
+			}
+
+            console.log("Connecting to", url);
+        	client	= Stomp.client(url);
+        	// client.debug	= console.log;
+			client.connect(username, password, function(frame) {
+            	console.log("Connected", frame);
+            	client.subscribe(localStorage.advisoryDestination, processAdvisoryMessage);
+			});
+		}
+
+		function init() {
+			fetch('js/settings.json')
+			.then(response => response.json())
+			.then(settings => {
+            	console.log("Settings loaded");
+				Object.keys(settings).forEach(key => {
+					let value = localStorage[key];
+					if(!value) {
+						localStorage[key] = settings[key];
+						value = localStorage[key];
+					}
+					const element = document.getElementById(key);
+					if(element) {
+						if(typeof element.checked !== 'undefined') {
+							element.checked = value;
+						}
+						if(typeof element.value !== 'undefined') {
+							element.value = value;
+						}
+					}
+				});
+				excludeDestinations = localStorage.excludeDestinations.split(/[, ]+/).map(dest => new RegExp(dest));
+
+				setShowEmptyDestinations({checked: localStorage.showEmptyDestinations == 'true'});
+				setIdHeaders({value: localStorage.idHeaders});
+				setFilterDestinations({value: localStorage.filterDestinations});
+				reconnect();
+			});
+  		}
+		init();
+
+		function getCSSRule(selectorText) {
+			for(const sheet of document.styleSheets) {
+				const rule = [].find.call(sheet.cssRules, rule => rule.selectorText == selectorText);
+				if(rule) {
+					return rule;
+				}
+			}
+			return null;
+		}
+
+		function setShowEmptyDestinations(checkbox) {
+			if(checkbox.checked) {
+				display = "inline-block";
+			} else {
+				display = "none";
+			}
+			const rule = getCSSRule('.destination');
+			rule.styleMap.set("display", display);
+			if(rule.styleMap.get("display") != display) {
+				rule.styleMap.set("display", display);
+			}
+			localStorage.showEmptyDestinations = checkbox.checked;
+		}
+
+		function setShowContent(checkbox) {
+			localStorage.showContent = checkbox.checked;
+		}
+
+		function setFilterDestinations(text) {
+			localStorage.filterDestinations = text.value;
+			filterDestinations = localStorage.filterDestinations.split(/[, ]+/);
+			applyDestinationFilters();
+		}
+
+		function applyDestinationFilters() {
+			const filter = filterDestinations[0];
+			const visibleNodeList = document.querySelectorAll('[id*="destination:'+filter+'"]');
+			// console.log("visibleNodeList", visibleNodeList);
+			Array.prototype.forEach.call(visibleNodeList, node => delete node.style.display);
+			const hiddenNodeList = document.querySelectorAll('[id*="destination:"]:not([id*="destination:'+filter+'"])');
+			Array.prototype.forEach.call(hiddenNodeList, node => node.style.display = "none");
+			// console.log("hiddenNodeList", hiddenNodeList);
+		}
+
+		function setIdHeaders(text) {
+			localStorage.idHeaders = text.value;
+			idHeaders = localStorage.idHeaders.split(/[, ]+/);
+		}
+
+		function setEvictAfter(num) {
+			localStorage.evictAfter = num.value;
+		}
+
+		function setAMQUrl(text) {
+			localStorage.amqUrl = text.value;
+			reconnect();
+		}
+
+		function setAMQUsername(text) {
+			localStorage.amqUsername = text.value;
+			reconnect();
+		}
+
+		function setAMQPassword(password) {
+			localStorage.amqPassword = password.value;
+			reconnect();
+		}
+
+	</script>
+
+  </head>
+
+  <body>
+	<div class="controls">
+		<div class="control">
+			<label for="amqUrl">Url</label>
+			<input type="text" id="amqUrl" name="amqUrl" onchange="setAMQUrl(this)">
+		</div>
+		<div class="control">
+			<label for="amqUsername">Username</label>
+			<input type="text" id="amqUsername" name="amqUsername" onchange="setAMQUsername(this)">
+		</div>
+		<div class="control">
+			<label for="amqPassword">Password</label>
+			<input type="password" id="amqPassword" name="amqPassword" onchange="setAMQPassword(this)">
+		</div>
+	</div>
+	<div class="controls">
+		<div class="control">
+			<label for="filterDestinations">Filter Destinations</label>
+			<input type="text" id="filterDestinations" name="filterDestinations" onchange="setFilterDestinations(this)">
+		</div>
+		<div class="control">
+			<label for="idHeaders">Id Headers</label>
+			<input type="text" id="idHeaders" name="idHeaders" onchange="setIdHeaders(this)">
+		</div>
+		<div class="control">
+			<label for="showContent">Show Content</label>
+			<input type="checkbox" id="showContent" name="showContent" onchange="setShowContent(this)">
+		</div>
+		<div class="control">
+			<label for="showEmptyDestinations">Show Empty Destinations</label>
+			<input type="checkbox" id="showEmptyDestinations" name="showEmptyDestinations" onchange="setShowEmptyDestinations(this)">
+		</div>
+		<div class="control">
+			<label for="evictAfter">Evict After</label>
+			<input type="number" id="evictAfter" name="evictAfter" class="numberInput" onchange="setEvictAfter(this)">
+		</div>
+	</div>
+	<div class="waiting">Waiting for AMQ...</div>
+	<div class="destinations"></div>
+  </body>
+</html>
