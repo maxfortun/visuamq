@@ -4,7 +4,7 @@
 	"amqPassword":	"password",
 	"destinationPrefix": "/topic/",
 	"advisoryDestination": "/topic/ActiveMQ.Advisory.Topic",
-	"excludeDestinations": "",
+	"excludeDestinations": "^ActiveMQ\\.",
 	"idHeaders": "breadcrumbId",
 	"evictAfter": 60,
 	"showEmptyDestinations": false,
