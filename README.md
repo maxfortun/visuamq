@@ -1,6 +1,7 @@
 # VisuAMQ
 Visual path and timing tracking of messages through ActiveMQ 
 
+![VisuAMQ Legend](img/VisuAMQ_legend.jpg)
 ## Background
 [ActiveMQ](https://activemq.apache.org) is a wonderful message broker that, especially in concert with [Camel](https://camel.apache.org), makes creating data processing pipelines something of a dream come true. ActiveMQ is performant, scalable, easy to configure and enhance. VisuAMQ is a quick and dirty visualization tool for ActiveMQ that was thrown together to track breadcrumbs through the ActiveMQ destinations and map out the routes that messages take with the hopes to quickly pinpoint bottlenecks and routing issues. 
 
