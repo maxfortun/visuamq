@@ -197,7 +197,7 @@
 					const element = document.getElementById(key);
 					if(element) {
 						if(typeof element.checked !== 'undefined') {
-							element.checked = value;
+							element.checked = ( value === 'true' );
 						}
 						if(typeof element.value !== 'undefined') {
 							element.value = value;
@@ -252,10 +252,10 @@
 			const filter = filterDestinations[0];
 			const visibleNodeList = document.querySelectorAll('[id*="destination:'+filter+'"]');
 			// console.log("visibleNodeList", visibleNodeList);
-			Array.prototype.forEach.call(visibleNodeList, node => delete node.style.display);
+			Array.prototype.forEach.call(visibleNodeList, node => node.style.display = '');
 			const hiddenNodeList = document.querySelectorAll('[id*="destination:"]:not([id*="destination:'+filter+'"])');
-			Array.prototype.forEach.call(hiddenNodeList, node => node.style.display = "none");
 			// console.log("hiddenNodeList", hiddenNodeList);
+			Array.prototype.forEach.call(hiddenNodeList, node => node.style.display = "none");
 		}
 
 		function setIdHeaders(text) {
