@@ -249,13 +249,14 @@
 		}
 
 		function applyDestinationFilters() {
-			const filter = filterDestinations[0];
-			const visibleNodeList = document.querySelectorAll('[id*="destination:'+filter+'"]');
-			// console.log("visibleNodeList", visibleNodeList);
-			Array.prototype.forEach.call(visibleNodeList, node => node.style.display = '');
-			const hiddenNodeList = document.querySelectorAll('[id*="destination:"]:not([id*="destination:'+filter+'"])');
+			const hiddenNodeList = document.querySelectorAll('[id*="destination:"]');
 			// console.log("hiddenNodeList", hiddenNodeList);
 			Array.prototype.forEach.call(hiddenNodeList, node => node.style.display = "none");
+			for(const filter of filterDestinations) {
+				const visibleNodeList = document.querySelectorAll('[id*="destination:'+filter+'"]');
+				console.log("visibleNodeList", filter, visibleNodeList);
+				Array.prototype.forEach.call(visibleNodeList, node => node.style.display = '');
+			}
 		}
 
 		function setIdHeaders(text) {
