@@ -32,7 +32,7 @@ Changes made via UI are stored in [localStorage](https://developer.mozilla.org/e
 | evictAfter | 60 | In seconds. Once at the last hope, the message will stay there until eviction expires
 | showEmptyDestinations | false | Messages travel through their destinations very quickly and most branch destinations are usually empty and just pollute the screen space
 | showContent | false | Not yet implemented. Useful if you want to see only the timing for destinations and do not care for the message routes
-| filterDestinations | `empty` | Inclusion filter. Shows a subset matching the specified filter
+| filterDestinations | `empty` | Inclusion filter. Comma separated list of destination prefixes. Shows a subset matching the specified filter
 
 
 
